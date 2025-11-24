@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-styling-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-styling-backend
+  template:
+    metadata:
+      labels:
+        app: ai-styling-backend
+    spec:
+      containers:
+        - name: backend
+          image: your-dockerhub-username/ai-styling-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:postgres@postgres-service:5432/stylingdb"
+            - name: MINIO_URL
+              value: "http://minio-service:9000"
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secrets
+                  key: accesskey
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secrets
+                  key: secretkey
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  selector:
+    app: ai-styling-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP
+
