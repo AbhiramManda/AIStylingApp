@@ -36,7 +36,7 @@ def generate_suggestions_with_llm(face_data: dict, body_type: str) -> dict:
         "eyes_open": face_data.get("EyesOpen", {}),
         "beard": face_data.get("Beard", {}),
         "mustache": face_data.get("Mustache", {}),
-        "gender_raw": face_data.get("Gender", {}),
+        "gender": face_data.get("Gender", {}),
         "body_type": body_type,
     }
 
@@ -55,7 +55,7 @@ def generate_suggestions_with_llm(face_data: dict, body_type: str) -> dict:
     skin_undertone = skin_block.get("skin_undertone", "neutral")
 
     profile_json = json.dumps(llm_profile, ensure_ascii=False)
-
+    print("profile_json:" , profile_json)
     prompt = f"""
 You are a professional AI stylist and grooming consultant.
 
@@ -142,6 +142,7 @@ Use the following output format and return ONLY valid JSON (no backticks, no ext
     import json as _json
     try:
         suggestions = _json.loads(response_text)
+        print("suggestions from openAI:", suggestions)
     except _json.JSONDecodeError:
         # Fallback if LLM doesn’t return proper JSON
         suggestions = {
@@ -171,8 +172,8 @@ Use the following output format and return ONLY valid JSON (no backticks, no ext
         }
 
     # Ensure skin_tone and gender fields are filled even if model omitted them
-    suggestions.setdefault("skin_tone", skin_tone)
-    suggestions.setdefault("gender", str(gender))
+    # suggestions.setdefault("skin_tone", skin_tone)
+    # suggestions.setdefault("gender", str(gender))
 
     return suggestions
 
@@ -481,13 +482,14 @@ def analyze_image_and_generate_features(image_path: str) -> Dict[str, Any]:
         bucket_name = os.getenv("S3_BUCKET")
         parsed = urlparse(image_path)
         key = parsed.path.lstrip("/")  # removes leading "/"
+        print("getting object from S3:")
     else:
         # Local file path
         base_dir = os.path.dirname(__file__)
         full_path = os.path.join(base_dir, image_path)
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"Image not found: {full_path}")
-
+        print("uploading to S3:")
         # Upload to S3/MinIO first so Rekognition can read it
         s3 = boto3.client(
             "s3",
@@ -552,174 +554,174 @@ def dummy():
 # 3. RULE-BASED SUGGESTIONS
 # ============================
 
-def generate_suggestions(face_data: dict, body_type: str) -> dict:
-    # ---- Raw Rekognition / legacy fields ----
-    print("Face Data:", face_data)
-    age_low = face_data.get("AgeRange", {}).get("Low", 25)
-    age_high = face_data.get("AgeRange", {}).get("High", 35)
-    smile = face_data.get("Smile", {}).get("Value", False)
-    eyeglasses = face_data.get("Eyeglasses", {}).get("Value", False)
-    eyesopen = face_data.get("EyesOpen", {}).get("Value", False)
-    beard_detected = face_data.get("Beard", {}).get("Value", False)
-    gender = face_data.get("Gender", {}).get("Value", face_data.get("gender", "Unknown"))
+# def generate_suggestions(face_data: dict, body_type: str) -> dict:
+#     # ---- Raw Rekognition / legacy fields ----
+#     print("Face Data:", face_data)
+#     age_low = face_data.get("AgeRange", {}).get("Low", 25)
+#     age_high = face_data.get("AgeRange", {}).get("High", 35)
+#     smile = face_data.get("Smile", {}).get("Value", False)
+#     eyeglasses = face_data.get("Eyeglasses", {}).get("Value", False)
+#     eyesopen = face_data.get("EyesOpen", {}).get("Value", False)
+#     beard_detected = face_data.get("Beard", {}).get("Value", False)
+#     gender = face_data.get("Gender", {}).get("Value", face_data.get("gender", "Unknown"))
 
-    # ---- New high-impact metrics with safe fallbacks ----
-    # Face shape
-    face_shape_detailed = face_data.get("face_shape_detailed")
-    base_face_shape = face_data.get("FaceShape", {}).get("Value", "Oval")
-    face_shape = (face_shape_detailed or base_face_shape or "Oval").lower()
+#     # ---- New high-impact metrics with safe fallbacks ----
+#     # Face shape
+#     face_shape_detailed = face_data.get("face_shape_detailed")
+#     base_face_shape = face_data.get("FaceShape", {}).get("Value", "Oval")
+#     face_shape = (face_shape_detailed or base_face_shape or "Oval").lower()
 
-    # Jawline & chin
-    jaw_info = face_data.get("jawline", {}) or {}
-    jaw_strength = jaw_info.get("strength", "unknown")           # strong / medium / soft
-    chin_shape = jaw_info.get("chin_shape", "unknown")           # pointed / rounded / square
+#     # Jawline & chin
+#     jaw_info = face_data.get("jawline", {}) or {}
+#     jaw_strength = jaw_info.get("strength", "unknown")           # strong / medium / soft
+#     chin_shape = jaw_info.get("chin_shape", "unknown")           # pointed / rounded / square
 
-    # Cheekbones
-    cheek_info = face_data.get("cheekbones", {}) or {}
-    cheek_prominence = cheek_info.get("prominence", "unknown")   # high / medium / low
+#     # Cheekbones
+#     cheek_info = face_data.get("cheekbones", {}) or {}
+#     cheek_prominence = cheek_info.get("prominence", "unknown")   # high / medium / low
 
-    # Forehead
-    forehead_info = face_data.get("forehead", {}) or {}
-    forehead_height_category = forehead_info.get("height_category", "medium")  # low / medium / high / unknown
-    hairline_shape = forehead_info.get("hairline_shape", "unknown")           # placeholder
+#     # Forehead
+#     forehead_info = face_data.get("forehead", {}) or {}
+#     forehead_height_category = forehead_info.get("height_category", "medium")  # low / medium / high / unknown
+#     hairline_shape = forehead_info.get("hairline_shape", "unknown")           # placeholder
 
-    # Hair
-    hair_info = face_data.get("hair", {}) or {}
-    hair_density = hair_info.get("hair_density", "unknown")      # low / medium / high / unknown
-    hair_texture = hair_info.get("hair_texture",
-                                 face_data.get("hair_texture", "unknown"))  # straight / wavy / curly / coily
+#     # Hair
+#     hair_info = face_data.get("hair", {}) or {}
+#     hair_density = hair_info.get("hair_density", "unknown")      # low / medium / high / unknown
+#     hair_texture = hair_info.get("hair_texture",
+#                                  face_data.get("hair_texture", "unknown"))  # straight / wavy / curly / coily
 
-    # Skin
-    skin_info = face_data.get("skin", {}) or {}
-    skin_tone = skin_info.get("skin_tone", face_data.get("skin_tone", "medium"))
-    skin_undertone = skin_info.get("skin_undertone", "neutral")  # warm / cool / neutral
+#     # Skin
+#     skin_info = face_data.get("skin", {}) or {}
+#     skin_tone = skin_info.get("skin_tone", face_data.get("skin_tone", "medium"))
+#     skin_undertone = skin_info.get("skin_undertone", "neutral")  # warm / cool / neutral
 
-    # ======================
-    # Hairstyle suggestion
-    # ======================
+#     # ======================
+#     # Hairstyle suggestion
+#     # ======================
 
-    # Base style from detailed face shape
-    hairstyle_base_map = {
-        "oval": "medium layered haircut with balanced volume",
-        "square": "short textured crop with softer edges to avoid extra boxiness",
-        "round": "longer on top with a taper or fade on the sides to add height",
-        "heart": "side-part with volume around the temples to balance a wider forehead",
-        "triangle": "fuller sides and a bit of volume on top to balance a stronger jaw",
-        "diamond": "medium length with fullness at the crown and softer sides to reduce cheek width",
-        "oblong": "medium length with minimal extra height on top to avoid elongating the face",
-        "rectangle": "medium length with low vertical volume and some width at the sides",
-    }
-    hairstyle = hairstyle_base_map.get(face_shape, "classic clean, medium-length style")
+#     # Base style from detailed face shape
+#     hairstyle_base_map = {
+#         "oval": "medium layered haircut with balanced volume",
+#         "square": "short textured crop with softer edges to avoid extra boxiness",
+#         "round": "longer on top with a taper or fade on the sides to add height",
+#         "heart": "side-part with volume around the temples to balance a wider forehead",
+#         "triangle": "fuller sides and a bit of volume on top to balance a stronger jaw",
+#         "diamond": "medium length with fullness at the crown and softer sides to reduce cheek width",
+#         "oblong": "medium length with minimal extra height on top to avoid elongating the face",
+#         "rectangle": "medium length with low vertical volume and some width at the sides",
+#     }
+#     hairstyle = hairstyle_base_map.get(face_shape, "classic clean, medium-length style")
 
-    # Adjust for forehead height and hairline, **only if not unknown**
-    if forehead_height_category == "high":
-        hairstyle += " and a light fringe or forward styling to soften a higher forehead"
-    elif forehead_height_category == "low":
-        hairstyle += " with the hair styled upward or back to open up the face"
-    # if "unknown": do nothing special
+#     # Adjust for forehead height and hairline, **only if not unknown**
+#     if forehead_height_category == "high":
+#         hairstyle += " and a light fringe or forward styling to soften a higher forehead"
+#     elif forehead_height_category == "low":
+#         hairstyle += " with the hair styled upward or back to open up the face"
+#     # if "unknown": do nothing special
 
-    if hairline_shape in ["widows_peak", "straight"]:
-        hairstyle += " while respecting your natural hairline rather than fighting it"
+#     if hairline_shape in ["widows_peak", "straight"]:
+#         hairstyle += " while respecting your natural hairline rather than fighting it"
 
-    # Adjust for hair density
-    if hair_density == "low":
-        hairstyle += " avoiding extremely tight fades to keep the scalp from showing through"
-    elif hair_density == "high":
-        hairstyle += " with some texturizing to reduce bulk and make styling easier"
+#     # Adjust for hair density
+#     if hair_density == "low":
+#         hairstyle += " avoiding extremely tight fades to keep the scalp from showing through"
+#     elif hair_density == "high":
+#         hairstyle += " with some texturizing to reduce bulk and make styling easier"
 
-    # Adjust for hair texture
-    if hair_texture in ["wavy", "curly"]:
-        hairstyle += " that works with your natural waves/curls using layered, shape-focused cuts"
-    elif hair_texture == "coily":
-        hairstyle += " with shape-focused, coil-friendly structure rather than trying to straighten everything"
+#     # Adjust for hair texture
+#     if hair_texture in ["wavy", "curly"]:
+#         hairstyle += " that works with your natural waves/curls using layered, shape-focused cuts"
+#     elif hair_texture == "coily":
+#         hairstyle += " with shape-focused, coil-friendly structure rather than trying to straighten everything"
 
-    # ======================
-    # Beard suggestion
-    # ======================
-    if gender and str(gender).lower().startswith("f"):
-        # if Rekognition labels as female, default to no beard rec
-        beard = "no beard recommendation (focus on hair and outfit instead)"
-    else:
-        if beard_detected:
-            # Already has facial hair → tune based on jaw + chin
-            if jaw_strength == "soft":
-                beard = "short boxed beard to carve in more jaw definition"
-            elif jaw_strength == "strong":
-                # already a strong jaw, don't over-bulk it
-                beard = "light to medium stubble to keep definition without adding too much bulk"
-            else:
-                beard = "neatly maintained stubble, shaped along the natural jawline"
-        else:
-            # No beard currently → suggestion based on jaw/chin
-            if jaw_strength == "soft":
-                beard = "try short stubble or a short boxed beard to give the jaw more structure"
-            elif chin_shape == "pointed":
-                beard = "a slightly fuller goatee or rounded beard to visually soften a very pointed chin"
-            else:
-                beard = "clean-shaven or short stubble for a sharp, low-maintenance look"
+#     # ======================
+#     # Beard suggestion
+#     # ======================
+#     if gender and str(gender).lower().startswith("f"):
+#         # if Rekognition labels as female, default to no beard rec
+#         beard = "no beard recommendation (focus on hair and outfit instead)"
+#     else:
+#         if beard_detected:
+#             # Already has facial hair → tune based on jaw + chin
+#             if jaw_strength == "soft":
+#                 beard = "short boxed beard to carve in more jaw definition"
+#             elif jaw_strength == "strong":
+#                 # already a strong jaw, don't over-bulk it
+#                 beard = "light to medium stubble to keep definition without adding too much bulk"
+#             else:
+#                 beard = "neatly maintained stubble, shaped along the natural jawline"
+#         else:
+#             # No beard currently → suggestion based on jaw/chin
+#             if jaw_strength == "soft":
+#                 beard = "try short stubble or a short boxed beard to give the jaw more structure"
+#             elif chin_shape == "pointed":
+#                 beard = "a slightly fuller goatee or rounded beard to visually soften a very pointed chin"
+#             else:
+#                 beard = "clean-shaven or short stubble for a sharp, low-maintenance look"
 
-    # ======================
-    # Outfit + color palette
-    # ======================
-    if body_type in ["ectomorph", "mesomorph"]:
-        outfit = "v-neck or crew-neck shirts, structured jackets, and slim/straight-fit jeans or chinos"
-    elif body_type == "average":
-        outfit = "tailored shirts, vertical stripes, and mid-to-dark tones to streamline the silhouette"
-    else:
-        outfit = "well-fitted basics (not too tight, not baggy) with layering pieces like overshirts or light jackets"
+#     # ======================
+#     # Outfit + color palette
+#     # ======================
+#     if body_type in ["ectomorph", "mesomorph"]:
+#         outfit = "v-neck or crew-neck shirts, structured jackets, and slim/straight-fit jeans or chinos"
+#     elif body_type == "average":
+#         outfit = "tailored shirts, vertical stripes, and mid-to-dark tones to streamline the silhouette"
+#     else:
+#         outfit = "well-fitted basics (not too tight, not baggy) with layering pieces like overshirts or light jackets"
 
-    # Color palette from tone + undertone
-    base_palette_map = {
-        "fair": ["navy", "charcoal", "olive"],
-        "medium": ["white", "beige", "burgundy"],
-        "tan": ["cream", "forest green", "rust"],
-        "deep": ["pastel blue", "gray", "tan"],
-    }
-    base_palette = base_palette_map.get(skin_tone, ["black", "white", "navy"])
+#     # Color palette from tone + undertone
+#     base_palette_map = {
+#         "fair": ["navy", "charcoal", "olive"],
+#         "medium": ["white", "beige", "burgundy"],
+#         "tan": ["cream", "forest green", "rust"],
+#         "deep": ["pastel blue", "gray", "tan"],
+#     }
+#     base_palette = base_palette_map.get(skin_tone, ["black", "white", "navy"])
 
-    if skin_undertone == "warm":
-        base_palette = [c for c in base_palette if c not in ["gray"]] + ["mustard", "warm brown"]
-    elif skin_undertone == "cool":
-        base_palette = [c for c in base_palette if c not in ["mustard", "rust"]] + ["cool blue", "true red"]
+#     if skin_undertone == "warm":
+#         base_palette = [c for c in base_palette if c not in ["gray"]] + ["mustard", "warm brown"]
+#     elif skin_undertone == "cool":
+#         base_palette = [c for c in base_palette if c not in ["mustard", "rust"]] + ["cool blue", "true red"]
 
-    # ======================
-    # Explanation string
-    # ======================
-    explanation = (
-        f"Face shape: {face_shape} → hairstyle: {hairstyle}. "
-        f"Jawline: strength={jaw_strength}, chin={chin_shape} → beard suggestion: {beard}. "
-        f"Cheekbone prominence: {cheek_prominence}; forehead height: {forehead_height_category}; "
-        f"hairline shape: {hairline_shape}. "
-        f"Hair density: {hair_density}, texture: {hair_texture}. "
-        f"Body type: {body_type} → outfit: {outfit}. "
-        f"Skin tone: {skin_tone}, undertone: {skin_undertone} → suggested colors: {', '.join(base_palette)}. "
-        f"Eyeglasses: {'Yes' if eyeglasses else 'No'}; eyes open: {'Yes' if eyesopen else 'No'}; "
-        f"smile: {'Yes' if smile else 'No'}. "
-        f"Gender: {gender}."
-    )
+#     # ======================
+#     # Explanation string
+#     # ======================
+#     explanation = (
+#         f"Face shape: {face_shape} → hairstyle: {hairstyle}. "
+#         f"Jawline: strength={jaw_strength}, chin={chin_shape} → beard suggestion: {beard}. "
+#         f"Cheekbone prominence: {cheek_prominence}; forehead height: {forehead_height_category}; "
+#         f"hairline shape: {hairline_shape}. "
+#         f"Hair density: {hair_density}, texture: {hair_texture}. "
+#         f"Body type: {body_type} → outfit: {outfit}. "
+#         f"Skin tone: {skin_tone}, undertone: {skin_undertone} → suggested colors: {', '.join(base_palette)}. "
+#         f"Eyeglasses: {'Yes' if eyeglasses else 'No'}; eyes open: {'Yes' if eyesopen else 'No'}; "
+#         f"smile: {'Yes' if smile else 'No'}. "
+#         f"Gender: {gender}."
+#     )
 
-    return {
-        "hairstyle": hairstyle,
-        "beard": beard,
-        "outfit": outfit,
-        "skin_tone": skin_tone,
-        "color_palette": base_palette,
-        "age_range": {"low": age_low, "high": age_high},
-        "explanation": explanation,
-        "Gender": gender,
-        "used_metrics": {
-            "face_shape_detailed": face_shape_detailed,
-            "jaw_strength": jaw_strength,
-            "chin_shape": chin_shape,
-            "cheek_prominence": cheek_prominence,
-            "forehead_height": forehead_height_category,
-            "hairline_shape": hairline_shape,
-            "hair_density": hair_density,
-            "hair_texture": hair_texture,
-            "skin_tone": skin_tone,
-            "skin_undertone": skin_undertone,
-        },
-    }
+#     return {
+#         "hairstyle": hairstyle,
+#         "beard": beard,
+#         "outfit": outfit,
+#         "skin_tone": skin_tone,
+#         "color_palette": base_palette,
+#         "age_range": {"low": age_low, "high": age_high},
+#         "explanation": explanation,
+#         "Gender": gender,
+#         "used_metrics": {
+#             "face_shape_detailed": face_shape_detailed,
+#             "jaw_strength": jaw_strength,
+#             "chin_shape": chin_shape,
+#             "cheek_prominence": cheek_prominence,
+#             "forehead_height": forehead_height_category,
+#             "hairline_shape": hairline_shape,
+#             "hair_density": hair_density,
+#             "hair_texture": hair_texture,
+#             "skin_tone": skin_tone,
+#             "skin_undertone": skin_undertone,
+#         },
+#     }
 
 
 # ============================
@@ -727,23 +729,24 @@ def generate_suggestions(face_data: dict, body_type: str) -> dict:
 # ============================
 
 if __name__ == "__main__":
-    test_image = "sample_face.jpg"  # Replace with a real image path
+    print("calling twice:")
+    # test_image = "sample_face.jpg"  # Replace with a real image path
 
-    try:
-        print("Analyzing image...")
-        features = analyze_image_and_generate_features(test_image)
-        print("Detected features:", features)
+    # try:
+    #     print("Analyzing image...")
+    #     features = analyze_image_and_generate_features(test_image)
+    #     print("Detected features:", features)
 
-        print("\nGenerating rule-based suggestions...")
-        suggestions_rule = generate_suggestions(features, body_type="mesomorph")
-        print("\n--- Rule-based Personal Style Suggestions ---")
-        for key, val in suggestions_rule.items():
-            print(f"{key.capitalize()}: {val}")
+    #     print("\nGenerating rule-based suggestions...")
+    #     suggestions_rule = generate_suggestions(features, body_type="mesomorph")
+    #     print("\n--- Rule-based Personal Style Suggestions ---")
+    #     for key, val in suggestions_rule.items():
+    #         print(f"{key.capitalize()}: {val}")
 
-        print("\nGenerating LLM-based suggestions...")
-        suggestions_llm = generate_suggestions_with_llm(features, body_type="mesomorph")
-        print("\n--- LLM-based Personal Style Suggestions ---")
-        print(suggestions_llm)
+    #     print("\nGenerating LLM-based suggestions...")
+    #     suggestions_llm = generate_suggestions_with_llm(features, body_type="mesomorph")
+    #     print("\n--- LLM-based Personal Style Suggestions ---")
+    #     print(suggestions_llm)
 
-    except FileNotFoundError as e:
-        print(e)
+    # except FileNotFoundError as e:
+    #     print(e)
