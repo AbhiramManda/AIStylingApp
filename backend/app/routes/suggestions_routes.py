@@ -3,7 +3,7 @@ from ..schemas import SuggestionIn, SuggestionOut
 from ..db import SessionLocal
 from sqlalchemy.orm import Session
 from ..models import StyleSuggestion
-from ..ai_engine import analyze_image_and_generate_features, generate_suggestions, generate_suggestions_with_llm
+from ..ai_engine import analyze_image_and_generate_features, generate_suggestions_with_llm
 from ..auth import decode_token
 from fastapi import Header
 
@@ -31,9 +31,10 @@ def create_suggestion(payload: SuggestionIn, db: Session = Depends(get_db), user
     features = {}
     if payload.image_url:
         # In production, download image, pass path to model
+        print("calling once")
         features = analyze_image_and_generate_features(payload.image_url)
-    else:
-        features = analyze_image_and_generate_features("sample.png")
+    # else:
+    #     features = analyze_image_and_generate_features("sample.png")
     # suggestion = generate_suggestions(features, payload.body_type)
     suggestion = generate_suggestions_with_llm(features, payload.body_type)
 
@@ -41,7 +42,7 @@ def create_suggestion(payload: SuggestionIn, db: Session = Depends(get_db), user
     db.add(db_record); db.commit(); db.refresh(db_record)
     return db_record
 
-@router.get("/suggestions", response_model=list[SuggestionOut])
+@router.get("/suggestions/history", response_model=list[SuggestionOut])
 def list_suggestions(db: Session = Depends(get_db), user_id: int = Depends(get_user_from_token)):
     results = db.query(StyleSuggestion).filter(StyleSuggestion.user_id == user_id).all()
     return results
