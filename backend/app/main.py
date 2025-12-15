@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from .db import engine, Base
-from .models import User, UserProfile, StyleSuggestion, Base
+from .models import User, UserProfile, StyleSuggestion, Chat, Base
 from fastapi.middleware.cors import CORSMiddleware
+from app.routes import chats_routes
 
 # This will create all tables defined in models.py if they don't exist
 Base.metadata.create_all(bind=engine)
@@ -28,3 +29,5 @@ app.include_router(auth_routes.router, prefix="/api", tags=["Auth"])
 app.include_router(upload_routes.router, prefix="/api", tags=["Upload"])
 app.include_router(suggestions_routes.router, prefix="/api", tags=["Suggestions"])
 app.include_router(user_routes.router, prefix="/api", tags=["User"])
+app.include_router(chats_routes.router, prefix="/api")
+
