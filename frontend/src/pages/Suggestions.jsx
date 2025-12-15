@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import SuggestionCard from "../components/SuggestionCard.jsx";
+import Chats from "../components/Chats.jsx";
 
 export default function Suggestions() {
   const { state } = useLocation();
@@ -14,6 +15,12 @@ export default function Suggestions() {
     <div className="suggestions-container">
       <h2>AI Styling Suggestions</h2>
       <SuggestionCard data={suggestionData} />
+
+      {/* Chat box appears below suggestions so user can ask follow-up questions */}
+      <div style={{ marginTop: "2rem" }}>
+        <h3>Chat with your AI Stylist</h3>
+        <Chats />
+      </div>
     </div>
   );
 }

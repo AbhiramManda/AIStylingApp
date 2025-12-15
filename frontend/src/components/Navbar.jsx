@@ -8,6 +8,7 @@ export default function Navbar() {
       <div>
         <Link to="/camera">Camera</Link>
         <Link to="/suggestions">Suggestions</Link>
+        <Link to="/chat">Chat</Link>
         <Link to="/">Logout</Link>
       </div>
     </nav>

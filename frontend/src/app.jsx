@@ -8,13 +8,8 @@ import Navbar from "./components/Navbar.jsx";
 import Footer from "./components/Footer.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 // import Alerts from "./components/Alert.jsx";
-import UploadButton from "./components/UploadButton.jsx"
-import ChatBox from "./components/ChatBox";
-
-
-
-
-
+import UploadButton from "./components/UploadButton.jsx";
+import Chats from "./components/Chats.jsx";
 export default function App() {
   return (
     <BrowserRouter>
@@ -24,9 +19,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/camera" element={<CameraCapture />} />
         <Route path="/suggestions" element={<Suggestions />} />
-        {/* <div className="min-h-screen bg-gray-50 flex justify-center items-center">
-          <ChatBox/>
-        </div> */}
+        <Route path="/chat" element={<Chats />} />
       </Routes>
       <Footer />
     </BrowserRouter>

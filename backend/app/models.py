@@ -26,3 +26,12 @@ class StyleSuggestion(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     suggestion = Column(JSON)  # contains hairstyle, beard, outfit details, image links
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Chat(Base):
+    __tablename__ = "chats"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    message = Column(String, nullable=False)  # user message
+    response = Column(String, nullable=False)  # AI response
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    user = relationship("User")

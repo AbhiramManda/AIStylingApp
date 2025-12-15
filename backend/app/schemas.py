@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Any, Dict
+from datetime import datetime
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -25,3 +26,14 @@ class SuggestionIn(BaseModel):
 class SuggestionOut(BaseModel):
     id: int
     suggestion: Dict[str, Any]
+
+class ChatMessageIn(BaseModel):
+    message: str
+
+class ChatMessageOut(BaseModel):
+    id: int
+    message: str
+    response: str
+    created_at: datetime
+    class Config:
+        orm_mode = True
