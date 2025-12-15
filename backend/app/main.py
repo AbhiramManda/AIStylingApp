@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from .db import engine, Base
-from .models import User, UserProfile, StyleSuggestion, Chat, Base
+from .models import User, UserProfile, StyleSuggestion, Chat
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import chats_routes
 
