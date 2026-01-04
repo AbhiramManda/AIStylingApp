@@ -5,6 +5,7 @@ from app.db import SessionLocal
 from app.models import Chat
 from app.schemas import ChatMessageIn, ChatMessageOut
 from app.auth import decode_token
+from app.ai_engine import get_current_season
 from typing import List
 
 router = APIRouter()
@@ -36,8 +37,8 @@ async def chat_endpoint(
 ):
     """
     POST endpoint for chat prompts with authentication.
-    Expects JSON: { "message": "<user_prompt>" }
-    Returns: { "response": "<ai_response>" }
+    Expects JSON: { "message": "<user_prompt>", "current_suggestions": {...} (optional), "location": "..." (optional), "age": <int> (optional) }
+    Returns: { "response": "<ai_response>", "updated_suggestions": {...} (optional) }
     """
     user_message = payload.message
     if not user_message or not user_message.strip():
@@ -54,8 +55,31 @@ async def chat_endpoint(
         conversation_history.append({"role": "user", "content": chat.message})
         conversation_history.append({"role": "assistant", "content": chat.response})
 
-    # Generate AI response
-    response_text = get_styling_suggestions(user_message, conversation_history)
+    # Get season, location, and age from payload, current suggestions, or use defaults
+    season = None
+    location = payload.location if hasattr(payload, 'location') and payload.location else None
+    age = payload.age if hasattr(payload, 'age') and payload.age else None
+    
+    if payload.current_suggestions:
+        if "season" in payload.current_suggestions:
+            season = payload.current_suggestions.get("season")
+        if "location" in payload.current_suggestions and not location:
+            location = payload.current_suggestions.get("location")
+        if "age" in payload.current_suggestions and not age:
+            age = payload.current_suggestions.get("age")
+    
+    if season is None:
+        season = get_current_season()
+
+    # Generate AI response with current suggestions context, season, location, and age
+    response_text, updated_suggestions = get_styling_suggestions(
+        user_message, 
+        conversation_history,
+        payload.current_suggestions,
+        season,
+        location,
+        age
+    )
 
     # Save chat to database
     chat_record = Chat(
@@ -67,7 +91,11 @@ async def chat_endpoint(
     db.commit()
     db.refresh(chat_record)
 
-    return {"response": response_text}
+    result = {"response": response_text}
+    if updated_suggestions:
+        result["updated_suggestions"] = updated_suggestions
+    
+    return result
 
 @router.get("/chat/history", response_model=List[ChatMessageOut])
 async def get_chat_history(

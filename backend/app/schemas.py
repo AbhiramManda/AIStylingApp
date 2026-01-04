@@ -20,8 +20,10 @@ class UploadResponse(BaseModel):
     url: str
 
 class SuggestionIn(BaseModel):
-    image_url: Optional[str]
-    body_type: Optional[str]
+    image_url: Optional[str] = None
+    body_type: Optional[str] = None
+    location: Optional[str] = None
+    age: Optional[int] = None
 
 class SuggestionOut(BaseModel):
     id: int
@@ -29,6 +31,9 @@ class SuggestionOut(BaseModel):
 
 class ChatMessageIn(BaseModel):
     message: str
+    current_suggestions: Optional[Dict[str, Any]] = None
+    location: Optional[str] = None
+    age: Optional[int] = None
 
 class ChatMessageOut(BaseModel):
     id: int

@@ -3,6 +3,7 @@ import os
 import math
 import re
 from urllib.parse import urlparse
+from datetime import datetime
 
 import boto3
 from openai import OpenAI
@@ -12,11 +13,46 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 # ============================
+# SEASON DETECTION UTILITY
+# ============================
+
+def get_current_season() -> str:
+    """
+    Determines the current season based on the date.
+    Returns: "winter", "spring", "summer", or "fall"
+    """
+    month = datetime.now().month
+    if month in [12, 1, 2]:
+        return "winter"
+    elif month in [3, 4, 5]:
+        return "spring"
+    elif month in [6, 7, 8]:
+        return "summer"
+    else:  # 9, 10, 11
+        return "fall"
+
+
+# ============================
 # 0. LLM SUGGESTION GENERATOR
 # ============================
 
-def generate_suggestions_with_llm(face_data: dict, body_type: str) -> dict:
+def generate_suggestions_with_llm(face_data: dict, body_type: str, season: Optional[str] = None, location: Optional[str] = None, age: Optional[int] = None) -> dict:
     import json
+
+    # Get current season if not provided
+    if season is None:
+        season = get_current_season()
+
+    # Extract age from AgeRange if not provided
+    if age is None:
+        age_range = face_data.get("AgeRange", {})
+        if age_range and isinstance(age_range, dict):
+            age_low = age_range.get("Low")
+            age_high = age_range.get("High")
+            if age_low is not None and age_high is not None:
+                age = (age_low + age_high) // 2  # Use midpoint of detected age range
+        elif isinstance(age_range, (int, float)):
+            age = int(age_range)
 
     # Build a compact, normalized profile to send to the LLM
     llm_profile = {
@@ -38,6 +74,9 @@ def generate_suggestions_with_llm(face_data: dict, body_type: str) -> dict:
         "mustache": face_data.get("Mustache", {}),
         "gender": face_data.get("Gender", {}),
         "body_type": body_type,
+        "season": season,
+        "location": location or "general",
+        "age": age,
     }
 
     # Best-effort gender & skin tone
@@ -56,15 +95,88 @@ def generate_suggestions_with_llm(face_data: dict, body_type: str) -> dict:
 
     profile_json = json.dumps(llm_profile, ensure_ascii=False)
     print("profile_json:" , profile_json)
+    location_context = location or "general"
+    
+    # Build age-based styling guidance
+    age_guidance = ""
+    if age is not None:
+        if age < 18:
+            age_category = "teen"
+            age_guidance = """
+AGE-BASED STYLING GUIDANCE (Teens):
+- Hairstyles: Trendy, modern cuts that reflect current youth culture. Can experiment with bold styles, colors, and lengths.
+- Outfits: Fashion-forward, streetwear-influenced, casual and comfortable. Can incorporate trendy items, sneakers, graphic tees.
+- Avoid overly formal or conservative styles unless specifically requested.
+"""
+        elif age < 25:
+            age_category = "young adult"
+            age_guidance = """
+AGE-BASED STYLING GUIDANCE (Young Adults 18-24):
+- Hairstyles: Modern, versatile styles that balance trendiness with professionalism. Can experiment with contemporary cuts.
+- Outfits: Mix of trendy and classic pieces. Smart-casual is ideal. Can incorporate current fashion trends while maintaining versatility.
+- Balance youthful energy with emerging professional needs.
+"""
+        elif age < 35:
+            age_category = "adult"
+            age_guidance = """
+AGE-BASED STYLING GUIDANCE (Adults 25-34):
+- Hairstyles: Polished, professional styles that are modern but timeless. Focus on well-maintained, versatile cuts.
+- Outfits: Professional-casual balance. Quality basics with contemporary touches. Smart-casual and business-casual appropriate.
+- Emphasize sophistication while staying current.
+"""
+        elif age < 50:
+            age_category = "mature adult"
+            age_guidance = """
+AGE-BASED STYLING GUIDANCE (Mature Adults 35-49):
+- Hairstyles: Classic, refined styles with modern updates. Focus on sophistication and low-maintenance elegance.
+- Outfits: Timeless pieces with contemporary fits. Quality over quantity. Professional and polished casual wear.
+- Emphasize refined, age-appropriate sophistication.
+"""
+        else:
+            age_category = "senior"
+            age_guidance = """
+AGE-BASED STYLING GUIDANCE (50+):
+- Hairstyles: Classic, elegant styles that are easy to maintain. Focus on sophistication and timeless appeal.
+- Outfits: Refined, comfortable, and well-fitted pieces. Timeless classics with modern fits. Quality materials and construction.
+- Emphasize elegance, comfort, and timeless style over trends.
+"""
+    else:
+        age_category = "unknown"
+        age_guidance = ""
+    
+    location_guidance = ""
+    if location:
+        location_guidance = f"""
+LOCATION-BASED STYLING GUIDANCE for {location}:
+Consider the climate, cultural norms, and local fashion trends of {location} when suggesting outfits.
+- Tropical/Equatorial locations: Even in "winter", suggest lighter fabrics. Summer is year-round hot and humid.
+- Desert locations: Hot days, cool nights - suggest layering even in summer. Winters are mild.
+- Temperate locations: Follow standard seasonal guidelines.
+- Cold/Polar locations: Winters are extremely cold - suggest heavy insulation. Summers are short and mild.
+- Coastal locations: Consider humidity, wind, and salt air - suggest breathable, durable fabrics.
+- Urban locations: More fashion-forward, trend-aware suggestions.
+- Rural locations: Practical, durable, comfortable suggestions.
+Adjust the "casual" outfit based on these location-specific considerations combined with the season.
+"""
+
     prompt = f"""
 You are a professional AI stylist and grooming consultant.
 
-I will give you a structured JSON profile describing a person's facial geometry, hair, skin, and body type.
+I will give you a structured JSON profile describing a person's facial geometry, hair, skin, body type, current season, location, and age.
 Use that profile to recommend:
 - A specific hairstyle (by name) with a short explanation
 - A beard style (or no beard) with a short explanation
-- Outfit suggestions (types of outfits + example items)
+- Outfit suggestions (types of outfits + example items) - MUST include exactly THREE outfit types: "casual", "smart-casual", and "formal"
 - A suggested skin tone label (for color palette) and a brief explanation tying everything together
+
+Current season: {season}
+Location: {location_context}
+Age: {age if age is not None else "Not specified"}
+
+{age_guidance}
+{location_guidance}
+
+{location_guidance}
 
 Here is the profile (JSON):
 
@@ -91,6 +203,20 @@ Key fields you can rely on:
     "skin_undertone": "cool | warm | neutral"
   }}
 - body_type: overall body type (ectomorph, mesomorph, endomorph, average, etc.)
+- season: current season (winter, spring, summer, fall)
+- location: user's location (consider climate and local fashion)
+- age: user's age (use this to ensure age-appropriate styling)
+
+IMPORTANT OUTFIT REQUIREMENTS:
+- You MUST include exactly THREE outfit types: "casual", "smart-casual", and "formal"
+- ALL three outfits MUST be season-appropriate AND location-appropriate AND age-appropriate:
+  * Winter: Consider location climate - tropical locations need lighter layers, cold locations need heavy insulation
+  * Spring: Light layers, transitional pieces - adjust based on location's spring climate
+  * Summer: Light fabrics, breathable materials - tropical locations may need year-round summer styles
+  * Fall: Medium layers, cozy pieces - adjust for location's fall climate
+- Location considerations: Urban areas may prefer trendier items, coastal areas need humidity-resistant fabrics, desert areas need temperature-regulating layers
+- Age considerations: Ensure all outfits are age-appropriate (teens = trendier, mature adults = more refined)
+- Each outfit suggestion should include specific items that are season-appropriate, location-appropriate, and age-appropriate
 
 Important:
 - If a field is missing or "unknown", make a reasonable, neutral recommendation and do not mention that the data is missing.
@@ -107,18 +233,37 @@ Use the following output format and return ONLY valid JSON (no backticks, no ext
     "style": "string",
     "description": "string"
   }},
-  "outfit": {{
-    "suggestions": [
-      {{
-        "type": "string",
-        "items": ["string"]
-      }}
-    ]
-  }},
-  "skin_tone": "string",
-  "explanation": "string",
-  "gender": "string"
-}}
+      "outfit": {{
+        "suggestions": [
+          {{
+            "type": "casual",
+            "season": "{season}",
+            "location": "{location_context}",
+            "items": ["string"],
+            "description": "string (optional)"
+          }},
+          {{
+            "type": "smart-casual",
+            "season": "{season}",
+            "location": "{location_context}",
+            "items": ["string"],
+            "description": "string (optional)"
+          }},
+          {{
+            "type": "formal",
+            "season": "{season}",
+            "location": "{location_context}",
+            "items": ["string"],
+            "description": "string (optional)"
+          }}
+        ]
+      }},
+      "skin_tone": "string",
+      "explanation": "string",
+      "gender": "string",
+      "season": "{season}",
+      "age": {age if age is not None else "null"}
+    }}
     """
 
     response = client.chat.completions.create(
@@ -157,12 +302,40 @@ Use the following output format and return ONLY valid JSON (no backticks, no ext
             "outfit": {
                 "suggestions": [
                     {
-                        "type": "smart-casual",
+                        "type": "casual",
+                        "season": get_current_season(),
+                        "location": location or "general",
+                        "age": age if age is not None else None,
                         "items": [
-                            "well-fitted shirt",
+                            "comfortable t-shirt or casual shirt",
+                            "jeans or casual pants",
+                            "sneakers or casual shoes",
+                        ],
+                        "description": "Casual outfit for hanging out with friends"
+                    },
+                    {
+                        "type": "smart-casual",
+                        "season": get_current_season(),
+                        "location": location or "general",
+                        "age": age if age is not None else None,
+                        "items": [
+                            "well-fitted shirt or polo",
                             "dark jeans or chinos",
                             "minimal sneakers or casual loafers",
                         ],
+                        "description": "Smart-casual outfit for semi-formal occasions"
+                    },
+                    {
+                        "type": "formal",
+                        "season": get_current_season(),
+                        "location": location or "general",
+                        "age": age if age is not None else None,
+                        "items": [
+                            "dress shirt and suit jacket",
+                            "dress pants or suit pants",
+                            "dress shoes",
+                        ],
+                        "description": "Formal outfit for business or formal events"
                     }
                 ]
             },

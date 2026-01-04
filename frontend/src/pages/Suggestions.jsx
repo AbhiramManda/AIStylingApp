@@ -1,25 +1,328 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import SuggestionCard from "../components/SuggestionCard.jsx";
-import Chats from "../components/Chats.jsx";
+
+const API_BASE = "http://localhost:8000/api";
 
 export default function Suggestions() {
   const { state } = useLocation();
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const messagesEndRef = useRef(null);
+  const [suggestionData, setSuggestionData] = useState(
+    state?.suggestions?.suggestion || state?.suggestions
+  );
+  const [location, setLocation] = useState(
+    suggestionData?.location || localStorage.getItem("userLocation") || ""
+  );
+  const [age, setAge] = useState(
+    suggestionData?.age || (localStorage.getItem("userAge") ? parseInt(localStorage.getItem("userAge")) : null)
+  );
 
-  const suggestionData =
-    state?.suggestions?.suggestion || state?.suggestions;
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Load recent history on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_BASE}/chat/history`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!res.ok) {
+          console.warn("Could not load history", await res.text());
+          return;
+        }
+        const data = await res.json();
+        const history = [];
+        data
+          .slice()
+          .reverse()
+          .forEach((item) => {
+            history.push({ role: "user", text: item.message });
+            history.push({ role: "ai", text: item.response });
+          });
+        setMessages(history);
+      } catch (err) {
+        console.error("Error loading history:", err);
+      }
+    };
+    loadHistory();
+  }, []);
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please log in to chat.");
+      return;
+    }
+
+    setError("");
+    const userMessage = input;
+    setMessages((prev) => [...prev, { role: "user", text: userMessage }]);
+    setLoading(true);
+
+    try {
+      const requestBody = {
+        message: userMessage,
+      };
+      
+      // Include current suggestions if available
+      if (suggestionData) {
+        requestBody.current_suggestions = suggestionData;
+      }
+      
+      // Include location if provided
+      if (location && location.trim()) {
+        requestBody.location = location.trim();
+        // Save to localStorage
+        localStorage.setItem("userLocation", location.trim());
+      }
+      
+      // Include age if provided
+      if (age && age > 0) {
+        requestBody.age = age;
+        // Save to localStorage
+        localStorage.setItem("userAge", age.toString());
+      }
+
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.detail || "Something went wrong. Please try again.");
+        return;
+      }
+
+      setMessages((prev) => [...prev, { role: "ai", text: data.response }]);
+      
+      // Update suggestions if AI returned new ones
+      if (data.updated_suggestions) {
+        setSuggestionData(data.updated_suggestions);
+        // Update location if it's in the updated suggestions
+        if (data.updated_suggestions.location) {
+          setLocation(data.updated_suggestions.location);
+          localStorage.setItem("userLocation", data.updated_suggestions.location);
+        }
+        // Update age if it's in the updated suggestions
+        if (data.updated_suggestions.age) {
+          setAge(data.updated_suggestions.age);
+          localStorage.setItem("userAge", data.updated_suggestions.age.toString());
+        }
+        // Show a notification that suggestions were updated
+        setMessages((prev) => [
+          ...prev,
+          { 
+            role: "system", 
+            text: "✨ Your suggestions have been updated based on your request!" 
+          }
+        ]);
+      }
+      
+      setInput("");
+    } catch (err) {
+      console.error("Error sending message:", err);
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!suggestionData) return <p>No suggestions found.</p>;
 
-  return (
-    <div className="suggestions-container">
-      <h2>AI Styling Suggestions</h2>
-      <SuggestionCard data={suggestionData} />
+  // Get current season for display
+  const getCurrentSeason = () => {
+    const month = new Date().getMonth() + 1; // 1-12
+    if (month >= 12 || month <= 2) return "winter";
+    if (month >= 3 && month <= 5) return "spring";
+    if (month >= 6 && month <= 8) return "summer";
+    return "fall";
+  };
 
-      {/* Chat box appears below suggestions so user can ask follow-up questions */}
-      <div style={{ marginTop: "2rem" }}>
-        <h3>Chat with your AI Stylist</h3>
-        <Chats />
+  const currentSeason = suggestionData?.season || getCurrentSeason();
+
+  return (
+    <div className="suggestions-container" style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
+        <h2 style={{ margin: 0, textAlign: "center", flex: 1 }}>AI Styling Suggestions</h2>
+        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+          <div style={{ 
+            padding: "0.5rem 1rem", 
+            backgroundColor: "#e0f2fe", 
+            borderRadius: "8px",
+            fontSize: "0.9rem",
+            fontWeight: "500",
+            color: "#0369a1"
+          }}>
+            Season: <span style={{ textTransform: "capitalize" }}>{currentSeason}</span>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <input
+              type="text"
+              placeholder="Enter location (e.g., New York, Miami, London)"
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                if (e.target.value.trim()) {
+                  localStorage.setItem("userLocation", e.target.value.trim());
+                }
+              }}
+              style={{
+                padding: "0.5rem 0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+                fontSize: "0.9rem",
+                width: "200px"
+              }}
+            />
+            <input
+              type="number"
+              placeholder="Age"
+              value={age || ""}
+              onChange={(e) => {
+                const ageValue = e.target.value ? parseInt(e.target.value) : null;
+                setAge(ageValue);
+                if (ageValue && ageValue > 0) {
+                  localStorage.setItem("userAge", ageValue.toString());
+                } else {
+                  localStorage.removeItem("userAge");
+                }
+              }}
+              min="1"
+              max="120"
+              style={{
+                padding: "0.5rem 0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+                fontSize: "0.9rem",
+                width: "80px"
+              }}
+            />
+          </div>
+        </div>
+      </div>
+      
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", marginBottom: "2rem" }}>
+        {/* Suggestions Card */}
+        <div>
+          <SuggestionCard data={suggestionData} />
+        </div>
+
+        {/* Integrated Chat */}
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <h3 style={{ marginBottom: "1rem", fontSize: "1.25rem" }}>Chat with your AI Stylist</h3>
+          
+          <div style={{ 
+            height: "400px", 
+            overflowY: "auto", 
+            backgroundColor: "#f9fafb", 
+            border: "1px solid #e5e7eb", 
+            borderRadius: "8px", 
+            padding: "1rem", 
+            marginBottom: "1rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem"
+          }}>
+            {messages.length === 0 && (
+              <div style={{ 
+                color: "#6b7280", 
+                fontStyle: "italic", 
+                textAlign: "center",
+                marginTop: "2rem"
+              }}>
+                Ask me anything about your styling suggestions!
+              </div>
+            )}
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: "0.75rem",
+                  borderRadius: "8px",
+                  maxWidth: "80%",
+                  backgroundColor: msg.role === "user" 
+                    ? "#3b82f6" 
+                    : msg.role === "system"
+                    ? "#fef3c7"
+                    : "#e5e7eb",
+                  color: msg.role === "user" ? "white" : "black",
+                  marginLeft: msg.role === "user" ? "auto" : "0",
+                  alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                  fontWeight: msg.role === "system" ? "600" : "normal"
+                }}
+              >
+                {msg.text}
+              </div>
+            ))}
+            {loading && (
+              <div style={{ color: "#6b7280", fontStyle: "italic" }}>
+                Stylist is thinking...
+              </div>
+            )}
+            {error && (
+              <div style={{ 
+                color: "#dc2626", 
+                fontSize: "0.875rem", 
+                backgroundColor: "#fef2f2", 
+                padding: "0.5rem", 
+                borderRadius: "4px" 
+              }}>
+                {error}
+              </div>
+            )}
+            <div ref={messagesEndRef}></div>
+          </div>
+
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <input
+              style={{
+                flex: 1,
+                border: "1px solid #d1d5db",
+                borderRadius: "8px",
+                padding: "0.5rem 0.75rem",
+                outline: "none"
+              }}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={`Ask about your suggestions... (e.g., "change casual outfit to ${currentSeason === "winter" ? "summer" : "winter"}")`}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              disabled={loading}
+            />
+            <button
+              style={{
+                backgroundColor: "#000",
+                color: "white",
+                padding: "0.5rem 1rem",
+                borderRadius: "8px",
+                border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.6 : 1
+              }}
+              onClick={sendMessage}
+              disabled={loading}
+            >
+              {loading ? "Sending..." : "Send"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
