@@ -154,6 +154,8 @@ def analyze_image_and_generate_features(image_path: str) -> Dict[str, Any]:
 
     }
 
+    print("Detected Gender:", app_features["gender"])
+
     # Merge with Rekognition face details for richer data
     combined_features = {**face, **app_features}
 
@@ -312,17 +314,33 @@ def generate_suggestions(face_data: dict, body_type: str) -> dict:
 if __name__ == "__main__":
     test_image = "sample_face.jpg"  # Replace with a real image path
 
-    try:
-        print("Analyzing image...")
-        features = analyze_image_and_generate_features(test_image)
-        print("Detected features:", features)
+    # try:
+    #     print("Analyzing image...")
+    #     features = analyze_image_and_generate_features(test_image)
+    #     print("Detected features:", features)
 
-        print("\nGenerating suggestions...")
-        suggestions = generate_suggestions(features, body_type="mesomorph")
+    #     print("\nGenerating suggestions...")
+    #     suggestions = generate_suggestions(features, body_type="mesomorph")
 
-        print("\n--- Personal Style Suggestions ---")
-        for key, val in suggestions.items():
-            print(f"{key.capitalize()}: {val}")
+    #     print("\n--- Personal Style Suggestions ---")
+    #     for key, val in suggestions.items():
+    #         print(f"{key.capitalize()}: {val}")
 
-    except FileNotFoundError as e:
-        print(e)
+    # except FileNotFoundError as e:
+    #     print(e)
+# def generate_chat_response(user_message: str) -> str:
+    #"""
+   # Simple chat endpoint for your ChatBox.
+    #Takes user text → sends to OpenAI → returns response string.
+    #"""
+
+    #response = client.chat.completions.create(
+       # model="gpt-4o-mini",
+      #  messages=[
+       #     {"role": "system", "content": "You are an AI stylist assistant."},
+       #     {"role": "user", "content": user_message}
+       # ],
+       # temperature=0.7,
+   # )
+
+    #return response.choices[0].message.content.strip()

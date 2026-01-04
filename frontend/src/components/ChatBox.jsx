@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+{/*import React, { useState } from "react";
 import API from "../api/api";
 
 export default function ChatBox() {
   const [messages, setMessages] = useState([
-    { sender: "ai", text: "Hi! 👋 Describe your look or ask for style ideas!" }
+    { sender: "ai", text: "Hi!  Describe your look or ask for style ideas!" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,3 +68,4 @@ export default function ChatBox() {
     </div>
   );
 }
+*/}

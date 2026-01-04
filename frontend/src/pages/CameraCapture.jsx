@@ -69,36 +69,6 @@ export default function CameraCapture() {
     }
   };
   
-  
-  // const uploadPhoto = async () => {
-  //   try {
-  //     const blob = await fetch(captured).then((res) => res.blob());
-  //     const formData = new FormData();
-  //     formData.append("file", blob, "photo.jpg");
-  
-  //     // 1️⃣ Upload the image
-  //     const uploadRes = await uploadImage(formData);
-  //     const imageUrl = uploadRes.data.url;
-  
-  //     localStorage.setItem("uploadedImage", imageUrl); // store for Suggestions page
-  
-  //     // 2️⃣ Call backend to get suggestions
-  //     const payload = {
-  //       image_url: imageUrl,
-  //       body_type: "slim",
-  //     };
-  //     const suggestionsRes = await getSuggestions(payload);
-  //     console.log("Suggestions received:", suggestionsRes.data);
-  
-  //     // 3️⃣ Navigate and pass suggestions via state
-  //     navigate("/suggestions", { state: { suggestions: suggestionsRes.data } });
-  
-  //   } catch (err) {
-  //     console.error("Upload or suggestions error:", err.response || err);
-  //     alert("Upload or suggestions failed");
-  //   }
-  // };
-  
   return (
     <div className="camera-container">
       {!captured ? (
