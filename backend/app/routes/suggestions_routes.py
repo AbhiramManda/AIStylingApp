@@ -3,7 +3,7 @@ from ..schemas import SuggestionIn, SuggestionOut
 from ..db import SessionLocal
 from sqlalchemy.orm import Session
 from ..models import StyleSuggestion, Chat
-from ..ai_engine import analyze_image_and_generate_features, generate_suggestions_with_llm
+from ..ai_engine import analyze_image_and_generate_features, generate_suggestions_with_llm, get_current_season
 from ..auth import decode_token
 from ..chats import get_styling_suggestions
 
@@ -36,7 +36,10 @@ def create_suggestion(payload: SuggestionIn, db: Session = Depends(get_db), user
     # else:
     #     features = analyze_image_and_generate_features("sample.png")
     # suggestion = generate_suggestions(features, payload.body_type)
-    suggestion = generate_suggestions_with_llm(features, payload.body_type)
+    season = get_current_season()
+    location = payload.location if hasattr(payload, 'location') and payload.location else None
+    age = payload.age if hasattr(payload, 'age') and payload.age else None
+    suggestion = generate_suggestions_with_llm(features, payload.body_type, season, location, age)
 
     db_record = StyleSuggestion(user_id=user_id, suggestion=suggestion)
     db.add(db_record); db.commit(); db.refresh(db_record)
@@ -72,8 +75,35 @@ def chat_prompt(
         conversation_history.append({"role": "user", "content": chat.message})
         conversation_history.append({"role": "assistant", "content": chat.response})
 
+    # Get current suggestions if provided
+    current_suggestions = payload.get("current_suggestions")
+    
+    # Get season, location, and age from current suggestions, payload, or use defaults
+    from ..ai_engine import get_current_season
+    season = None
+    location = payload.get("location")
+    age = payload.get("age")
+    
+    if current_suggestions:
+        if "season" in current_suggestions:
+            season = current_suggestions.get("season")
+        if "location" in current_suggestions and not location:
+            location = current_suggestions.get("location")
+        if "age" in current_suggestions and not age:
+            age = current_suggestions.get("age")
+    
+    if season is None:
+        season = get_current_season()
+
     # Generate AI response
-    response_text = get_styling_suggestions(user_message, conversation_history)
+    response_text, updated_suggestions = get_styling_suggestions(
+        user_message, 
+        conversation_history,
+        current_suggestions,
+        season,
+        location,
+        age
+    )
 
     # Save chat to database
     chat_record = Chat(
@@ -84,4 +114,8 @@ def chat_prompt(
     db.add(chat_record)
     db.commit()
 
-    return {"explanation": response_text}
+    result = {"explanation": response_text}
+    if updated_suggestions:
+        result["updated_suggestions"] = updated_suggestions
+    
+    return result

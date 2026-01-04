@@ -76,10 +76,21 @@ export default function CameraCapture() {
       }
   
       try {
+        const userLocation = localStorage.getItem("userLocation");
+        const userAge = localStorage.getItem("userAge");
         const payload = {
           image_url: imageUrl,
           body_type: "slim", // required by backend
         };
+        if (userLocation && userLocation.trim()) {
+          payload.location = userLocation.trim();
+        }
+        if (userAge) {
+          const ageValue = parseInt(userAge);
+          if (ageValue && ageValue > 0) {
+            payload.age = ageValue;
+          }
+        }
         const suggestionsRes = await getSuggestions(payload);
         console.log("Suggestions received:", suggestionsRes.data);
         navigate("/suggestions", { state: { suggestions: suggestionsRes.data } });
