@@ -76,21 +76,17 @@ export default function CameraCapture() {
       }
   
       try {
+        // Location will be auto-detected from image analysis, but include stored location if available
         const userLocation = localStorage.getItem("userLocation");
-        const userAge = localStorage.getItem("userAge");
         const payload = {
           image_url: imageUrl,
           body_type: "slim", // required by backend
         };
+        // Only include location if manually set (auto-detected location is handled by backend)
         if (userLocation && userLocation.trim()) {
           payload.location = userLocation.trim();
         }
-        if (userAge) {
-          const ageValue = parseInt(userAge);
-          if (ageValue && ageValue > 0) {
-            payload.age = ageValue;
-          }
-        }
+        // Age will be auto-detected from image (AgeRange)
         const suggestionsRes = await getSuggestions(payload);
         console.log("Suggestions received:", suggestionsRes.data);
         navigate("/suggestions", { state: { suggestions: suggestionsRes.data } });

@@ -43,14 +43,17 @@ def generate_suggestions_with_llm(face_data: dict, body_type: str, season: Optio
     if season is None:
         season = get_current_season()
 
-    # Extract age from AgeRange if not provided
+    # Extract age from AgeRange if not provided - use Low value for more accurate age (usually within 1-2 years)
     if age is None:
         age_range = face_data.get("AgeRange", {})
         if age_range and isinstance(age_range, dict):
             age_low = age_range.get("Low")
             age_high = age_range.get("High")
-            if age_low is not None and age_high is not None:
-                age = (age_low + age_high) // 2  # Use midpoint of detected age range
+            if age_low is not None:
+                # Use Low value + 1 for more accurate age (Rekognition Low is typically within 1-2 years of actual age)
+                age = age_low + 1 if age_low < 50 else age_low
+            elif age_high is not None:
+                age = age_high - 2 if age_high > 10 else age_high
         elif isinstance(age_range, (int, float)):
             age = int(age_range)
 

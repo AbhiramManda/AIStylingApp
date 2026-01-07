@@ -10,8 +10,12 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="AI Personal Styling App API", redirect_slashes=False)
 # ✅ Add this section
 origins = [
-    "http://localhost:8080",   # frontend (vite/nginx)
+    "http://localhost:8080",   # frontend (docker/nginx)
     "http://127.0.0.1:8080",   # sometimes used by browsers
+    "http://localhost:5173",   # Vite dev server
+    "http://127.0.0.1:5173",   # Vite dev server alternative
+    "http://localhost:3000",   # Alternative dev port
+    "http://127.0.0.1:3000",   # Alternative dev port
 ]
 
 app.add_middleware(
