@@ -23,10 +23,10 @@ export default function Suggestions() {
   const [locationDetecting, setLocationDetecting] = useState(false);
   const [updatingSuggestions, setUpdatingSuggestions] = useState(false);
 
-  // Auto-detect location on mount
+  // Auto-detect location on mount using GPS only (only if not already detected)
   useEffect(() => {
     const detectLocation = async () => {
-      // Skip if location already exists
+      // Skip if location already exists (should be detected before reaching this page)
       if (localStorage.getItem("userLocation")) {
         return;
       }
@@ -81,56 +81,17 @@ export default function Suggestions() {
                 }
               } catch (err) {
                 console.error("Error reverse geocoding:", err);
-                // Fallback: try IP-based geolocation (less accurate)
-                try {
-                  const ipResponse = await fetch("https://ipapi.co/json/");
-                  const ipData = await ipResponse.json();
-                  const city = ipData.city;
-                  const region = ipData.region;
-                  const cityLocation = city ? (region ? `${city}, ${region}` : city) : (region || "");
-                  if (cityLocation) {
-                    setLocation(cityLocation);
-                    localStorage.setItem("userLocation", cityLocation);
-                  }
-                } catch (ipErr) {
-                  console.error("Error IP geolocation:", ipErr);
-                }
               }
               setLocationDetecting(false);
             },
-            async (error) => {
+            (error) => {
               console.error("Geolocation error:", error);
-              // Fallback: try IP-based geolocation
-              try {
-                const ipResponse = await fetch("https://ipapi.co/json/");
-                const ipData = await ipResponse.json();
-                const cityLocation = ipData.city || ipData.region || "";
-                if (cityLocation) {
-                  setLocation(cityLocation);
-                  localStorage.setItem("userLocation", cityLocation);
-                }
-              } catch (ipErr) {
-                console.error("Error IP geolocation:", ipErr);
-              }
               setLocationDetecting(false);
             },
             { timeout: 10000, enableHighAccuracy: true, maximumAge: 300000 }
           );
         } else {
-          // Fallback: try IP-based geolocation (less accurate)
-          try {
-            const ipResponse = await fetch("https://ipapi.co/json/");
-            const ipData = await ipResponse.json();
-            const city = ipData.city;
-            const region = ipData.region;
-            const cityLocation = city ? (region ? `${city}, ${region}` : city) : (region || "");
-            if (cityLocation) {
-              setLocation(cityLocation);
-              localStorage.setItem("userLocation", cityLocation);
-            }
-          } catch (ipErr) {
-            console.error("Error IP geolocation:", ipErr);
-          }
+          console.warn("Geolocation is not supported by this browser");
           setLocationDetecting(false);
         }
       } catch (err) {
@@ -348,107 +309,18 @@ export default function Suggestions() {
 
   return (
     <div className="suggestions-container" style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
-        <h2 style={{ margin: 0, textAlign: "center", flex: 1 }}>AI Styling Suggestions</h2>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-          <div style={{ 
-            padding: "0.5rem 1rem", 
-            backgroundColor: "#e0f2fe", 
-            borderRadius: "8px",
-            fontSize: "0.9rem",
-            fontWeight: "500",
-            color: "#0369a1"
-          }}>
-            Season: <span style={{ textTransform: "capitalize" }}>{currentSeason}</span>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <div style={{ position: "relative" }}>
-              <input
-                type="text"
-                placeholder={locationDetecting ? "Detecting location..." : (location || "Enter your location (e.g., New York, NY)")}
-                value={location}
-                onChange={(e) => {
-                  setLocation(e.target.value);
-                  if (e.target.value.trim()) {
-                    localStorage.setItem("userLocation", e.target.value.trim());
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && location && location.trim()) {
-                    updateSuggestionsForLocation();
-                  }
-                }}
-                disabled={locationDetecting || updatingSuggestions}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px",
-                  fontSize: "0.9rem",
-                  width: "200px",
-                  opacity: (locationDetecting || updatingSuggestions) ? 0.6 : 1
-                }}
-              />
-              {locationDetecting && (
-                <div style={{
-                  position: "absolute",
-                  top: "50%",
-                  right: "0.5rem",
-                  transform: "translateY(-50%)",
-                  fontSize: "0.75rem",
-                  color: "#6b7280"
-                }}>
-                  📍
-                </div>
-              )}
-            </div>
-            <input
-              type="number"
-              placeholder="Age"
-              value={age || ""}
-              onChange={(e) => {
-                const ageValue = e.target.value ? parseInt(e.target.value) : null;
-                setAge(ageValue);
-                if (ageValue && ageValue > 0) {
-                  localStorage.setItem("userAge", ageValue.toString());
-                } else {
-                  localStorage.removeItem("userAge");
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && location && location.trim()) {
-                  updateSuggestionsForLocation();
-                }
-              }}
-              min="1"
-              max="120"
-              disabled={updatingSuggestions}
-              style={{
-                padding: "0.5rem 0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "8px",
-                fontSize: "0.9rem",
-                width: "80px",
-                opacity: updatingSuggestions ? 0.6 : 1
-              }}
-            />
-            <button
-              onClick={updateSuggestionsForLocation}
-              disabled={!location || !location.trim() || updatingSuggestions || !suggestionData}
-              style={{
-                padding: "0.5rem 1rem",
-                backgroundColor: updatingSuggestions ? "#9ca3af" : "#3b82f6",
-                color: "white",
-                border: "none",
-                borderRadius: "8px",
-                fontSize: "0.9rem",
-                cursor: (!location || !location.trim() || updatingSuggestions || !suggestionData) ? "not-allowed" : "pointer",
-                opacity: (!location || !location.trim() || updatingSuggestions || !suggestionData) ? 0.6 : 1,
-                fontWeight: "500"
-              }}
-            >
-              {updatingSuggestions ? "Updating..." : "Update"}
-            </button>
-          </div>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "2rem" }}>
+        <h2 style={{ margin: 0, textAlign: "center" }}>AI Styling Suggestions</h2>
+        <div style={{ 
+          marginLeft: "2rem",
+          padding: "0.5rem 1rem", 
+          backgroundColor: "#e0f2fe", 
+          borderRadius: "8px",
+          fontSize: "0.9rem",
+          fontWeight: "500",
+          color: "#0369a1"
+        }}>
+          Season: <span style={{ textTransform: "capitalize" }}>{currentSeason}</span>
         </div>
       </div>
       
