@@ -20,6 +20,88 @@ export default function Suggestions() {
   const [age, setAge] = useState(
     suggestionData?.age || (localStorage.getItem("userAge") ? parseInt(localStorage.getItem("userAge")) : null)
   );
+  const [locationDetecting, setLocationDetecting] = useState(false);
+  const [updatingSuggestions, setUpdatingSuggestions] = useState(false);
+
+  // Auto-detect location on mount using GPS only (only if not already detected)
+  useEffect(() => {
+    const detectLocation = async () => {
+      // Skip if location already exists (should be detected before reaching this page)
+      if (localStorage.getItem("userLocation")) {
+        return;
+      }
+
+      setLocationDetecting(true);
+      try {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            async (position) => {
+              try {
+                // Use reverse geocoding to get location name - try multiple services for accuracy
+                let detectedLocation = "";
+                
+                // Try OpenStreetMap Nominatim first (free, accurate)
+                try {
+                  const osmResponse = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${position.coords.latitude}&lon=${position.coords.longitude}&zoom=10&addressdetails=1`,
+                    { headers: { 'User-Agent': 'AI-Styling-App' } }
+                  );
+                  const osmData = await osmResponse.json();
+                  if (osmData && osmData.address) {
+                    const city = osmData.address.city || osmData.address.town || osmData.address.village || osmData.address.municipality;
+                    const state = osmData.address.state || osmData.address.region;
+                    if (city) {
+                      detectedLocation = state ? `${city}, ${state}` : city;
+                    }
+                  }
+                } catch (osmErr) {
+                  console.error("OSM geocoding error:", osmErr);
+                }
+                
+                // Fallback to bigdatacloud if OSM fails
+                if (!detectedLocation) {
+                  const response = await fetch(
+                    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${position.coords.latitude}&longitude=${position.coords.longitude}&localityLanguage=en`
+                  );
+                  const data = await response.json();
+                  
+                  // Combine city and state/region for better accuracy
+                  const city = data.city || data.locality;
+                  const state = data.principalSubdivision || data.administrativeArea;
+                  if (city) {
+                    detectedLocation = state ? `${city}, ${state}` : city;
+                  } else {
+                    detectedLocation = data.principalSubdivision || data.locality || data.countryName || "";
+                  }
+                }
+                
+                if (detectedLocation) {
+                  setLocation(detectedLocation);
+                  localStorage.setItem("userLocation", detectedLocation);
+                }
+              } catch (err) {
+                console.error("Error reverse geocoding:", err);
+              }
+              setLocationDetecting(false);
+            },
+            (error) => {
+              console.error("Geolocation error:", error);
+              setLocationDetecting(false);
+            },
+            { timeout: 10000, enableHighAccuracy: true, maximumAge: 300000 }
+          );
+        } else {
+          console.warn("Geolocation is not supported by this browser");
+          setLocationDetecting(false);
+        }
+      } catch (err) {
+        console.error("Location detection error:", err);
+        setLocationDetecting(false);
+      }
+    };
+
+    detectLocation();
+  }, []);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -57,6 +139,73 @@ export default function Suggestions() {
     };
     loadHistory();
   }, []);
+
+  const updateSuggestionsForLocation = async () => {
+    if (!suggestionData || !location || !location.trim() || updatingSuggestions) return;
+    
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("Please log in to update suggestions.");
+      return;
+    }
+
+    setUpdatingSuggestions(true);
+    setError("");
+
+    try {
+      const requestBody = {
+        message: `Update suggestions for location: ${location.trim()}${age ? ` and age: ${age}` : ""}`,
+        current_suggestions: {
+          ...suggestionData,
+          location: location.trim(),
+          ...(age ? { age } : {})
+        },
+        location: location.trim(),
+        ...(age ? { age } : {})
+      };
+
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data?.detail || "Failed to update suggestions.");
+        return;
+      }
+
+      // Update suggestions if AI returned new ones
+      if (data.updated_suggestions) {
+        setSuggestionData(data.updated_suggestions);
+        // Show a notification that suggestions were updated
+        setMessages((prev) => [
+          ...prev,
+          { 
+            role: "system", 
+            text: `✨ Suggestions updated for ${location.trim()}!` 
+          }
+        ]);
+      } else {
+        // If no updated suggestions, try to update current suggestions with new location/age
+        setSuggestionData({
+          ...suggestionData,
+          location: location.trim(),
+          ...(age ? { age } : {})
+        });
+      }
+    } catch (err) {
+      console.error("Error updating suggestions:", err);
+      setError("Failed to update suggestions. Please try again.");
+    } finally {
+      setUpdatingSuggestions(false);
+    }
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -160,62 +309,18 @@ export default function Suggestions() {
 
   return (
     <div className="suggestions-container" style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "1rem" }}>
-        <h2 style={{ margin: 0, textAlign: "center", flex: 1 }}>AI Styling Suggestions</h2>
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-          <div style={{ 
-            padding: "0.5rem 1rem", 
-            backgroundColor: "#e0f2fe", 
-            borderRadius: "8px",
-            fontSize: "0.9rem",
-            fontWeight: "500",
-            color: "#0369a1"
-          }}>
-            Season: <span style={{ textTransform: "capitalize" }}>{currentSeason}</span>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <input
-              type="text"
-              placeholder="Enter location (e.g., New York, Miami, London)"
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                if (e.target.value.trim()) {
-                  localStorage.setItem("userLocation", e.target.value.trim());
-                }
-              }}
-              style={{
-                padding: "0.5rem 0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "8px",
-                fontSize: "0.9rem",
-                width: "200px"
-              }}
-            />
-            <input
-              type="number"
-              placeholder="Age"
-              value={age || ""}
-              onChange={(e) => {
-                const ageValue = e.target.value ? parseInt(e.target.value) : null;
-                setAge(ageValue);
-                if (ageValue && ageValue > 0) {
-                  localStorage.setItem("userAge", ageValue.toString());
-                } else {
-                  localStorage.removeItem("userAge");
-                }
-              }}
-              min="1"
-              max="120"
-              style={{
-                padding: "0.5rem 0.75rem",
-                border: "1px solid #d1d5db",
-                borderRadius: "8px",
-                fontSize: "0.9rem",
-                width: "80px"
-              }}
-            />
-          </div>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", marginBottom: "2rem" }}>
+        <h2 style={{ margin: 0, textAlign: "center" }}>AI Styling Suggestions</h2>
+        <div style={{ 
+          marginLeft: "2rem",
+          padding: "0.5rem 1rem", 
+          backgroundColor: "#e0f2fe", 
+          borderRadius: "8px",
+          fontSize: "0.9rem",
+          fontWeight: "500",
+          color: "#0369a1"
+        }}>
+          Season: <span style={{ textTransform: "capitalize" }}>{currentSeason}</span>
         </div>
       </div>
       
